@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+data:
+  logstash.yml: |
+    http.host: "0.0.0.0"
+    path.config: /usr/share/logstash/pipeline/logstash.conf
+
+  logstash.conf: |
+    input {
+      beats {
+        port => 5044
+      }
+    }
+    filter {
+      grok {
+        match => { "message" => "%{IPORHOST:remote_ip} - %{DATA:user_name} \[%{HTTPDATE:access_time}\] \"%{WORD:http_method} %{DATA:url} HTTP/%{NUMBER:http_version}\" %{NUMBER:response_code} %{NUMBER:body_sent_bytes} \"%{DATA:referrer}\" \"%{DATA:agent}\"" }
+        # remove_field => "message"
+      }
+      # mutate {
+      #   replace => {
+      #     "message" => ["%{remote_ip}", "%{http_method}", "%{url}", "%{response_code}", " "]
+      #   }
+      # }
+
+      # mutate {
+      #   add_field => {"serviceName" => "nginx"}
+      # }
+    }
+
+
+    output {
+      elasticsearch {
+        hosts => ["elasticsearch_url"]
+        user => "elastic"
+        password => "elastic_password"
+        codec => json
+      }
+    }

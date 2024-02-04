@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-deployment
+  labels:
+    app: frontend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      # The built react app
+      - name: frontend
+        image: vishal354/frontend-nodeapp:5
+        ports:
+        - containerPort: 80
+        volumeMounts:
+          - name: nginx-logs
+            mountPath: /var/log/nginx/
+        env: 
+          - name: REACT_APP_BACKEND_URL
+            value: http://127.0.0.1:50741/api
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 200m
+            memory: 200Mi
+
+      # Filebeat sidecar container
+      - name: filebeat-sidecar
+        image: docker.elastic.co/beats/filebeat:8.12.0
+        volumeMounts:
+        - name: nginx-logs
+          mountPath: /var/log/nginx/
+        - name: filebeat-config
+          mountPath: /usr/share/filebeat/filebeat.yml
+          subPath: filebeat.yml
+          readOnly: true
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+      
+      # Volumes for the filebeat sidecar container
+      volumes:
+      - name: nginx-logs
+      - name: filebeat-config
+        configMap:
+          name: filebeat-configmap
+          items:
+            - key: filebeat.yml
+              path: filebeat.yml
+      
+      # Setting anti-affinity to enforce that pods are placed on different nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - frontend
+              topologyKey: "kubernetes.io/hostname"
